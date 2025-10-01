@@ -1,0 +1,21 @@
+name: Main CD
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet restore ./app/Pathways.Api.csproj
+      - run: dotnet build ./app/Pathways.Api.csproj --configuration Release --no-restore
+      - run: dotnet test ./tests/Pathways.Api.Tests.csproj --no-build --verbosity normal
+
+      # Deploy (placeholder - vamos configurar depois com Terraform + AWS ECS)
+      - name: Deploy to AWS
+        run: echo "TODO: Deploy pipeline to AWS ECS"

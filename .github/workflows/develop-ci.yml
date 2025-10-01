@@ -1,0 +1,19 @@
+name: Develop CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore ./app/Pathways.Api.csproj
+      - run: dotnet build ./app/Pathways.Api.csproj --configuration Release --no-restore
+      - run: dotnet test ./tests/Pathways.Api.Tests.csproj --no-build --verbosity normal
