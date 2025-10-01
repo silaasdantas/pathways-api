@@ -1,0 +1,6 @@
+@Pathways.Api_HostAddress = http://localhost:5223
+
+GET {{Pathways.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
