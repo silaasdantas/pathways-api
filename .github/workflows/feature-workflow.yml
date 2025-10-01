@@ -32,7 +32,7 @@ jobs:
       - name: Test
         run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
 
-      # 6. Criar Pull Request para develop
+      # 6. Criar Pull Request para develop (NÃO mergeia)
       - name: Create Pull Request to develop
         if: success()
         uses: peter-evans/create-pull-request@v6
@@ -47,3 +47,4 @@ jobs:
           labels: |
             feature
             auto-pr
+          draft: false

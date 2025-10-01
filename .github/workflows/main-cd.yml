@@ -14,7 +14,7 @@ jobs:
           dotnet-version: '8.0.x'
       - run: dotnet restore ./app/Pathways.Api.csproj
       - run: dotnet build ./app/Pathways.Api.csproj --configuration Release --no-restore
-      - run: dotnet test ./tests/Pathways.Api.Tests.csproj --no-build --verbosity normal
+      - run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
 
       # Deploy (placeholder - vamos configurar depois com Terraform + AWS ECS)
       - name: Deploy to AWS
