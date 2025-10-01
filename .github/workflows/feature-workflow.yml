@@ -30,7 +30,7 @@ jobs:
 
       # 5. Test
       - name: Test
-        run: dotnet test ./tests/Pathways.Api.Tests.csproj --no-build --verbosity normal
+        run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
 
       # 6. Criar Pull Request para develop
       - name: Create Pull Request to develop
