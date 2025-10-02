@@ -37,8 +37,9 @@ jobs:
         if: success()
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}  
+          base: develop
+          branch: ${{ github.head_ref || github.ref_name }}
           base: develop
           title: "Auto PR from ${{ github.ref_name }} to develop"
           body: |
