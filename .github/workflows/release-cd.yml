@@ -6,7 +6,8 @@ on:
       - "release/*"
 
 permissions:
-  contents: write # necessário para atualizar branch
+  contents: write # permite atualizar branches
+  pull-requests: write # permite criar PRs
 
 jobs:
   build-test-pr:
@@ -35,16 +36,18 @@ jobs:
       - name: Run tests
         run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
 
-      # 6. Instalar GitHub CLI
-      - name: Setup GitHub CLI
-        uses: cli/cli-action@v2
-        with:
-          version: latest
+      # 6. Install GitHub CLI
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
 
       # 7. Criar ou atualizar PR release → main
       - name: Create or update PR release → main
         run: |
           branch="${{ github.ref_name }}"
+          echo "Branch atual: $branch"
+
           pr_number=$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number')
 
           if [ -n "$pr_number" ]; then
@@ -55,7 +58,7 @@ jobs:
               --base main \
               --head "$branch" \
               --title "Release $branch → main" \
-              --body "PR criado automaticamente da branch \`$branch\` para \`main\`. ✅ Build e testes passaram."
+              --body "PR criado automaticamente da branch \`$branch\` para \`main\`. ✅ Build e testes passaram com sucesso."
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
