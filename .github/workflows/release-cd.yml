@@ -36,35 +36,14 @@ jobs:
       - name: Build Docker image
         run: docker build -t pathways-api:test ./app
 
-      # 7. Criar ou atualizar PR release → main
+      # 7. Criar Pull Request automático para main
       - name: Create PR release → main
-        id: create_pr
-        uses: peter-evans/create-pull-request@v6
+        uses: repo-sync/pull-request@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          base: main
-          branch: ${{ github.ref_name }}
-          title: "Release ${{ github.ref_name }} → main"
-          body: |
-            Este PR foi criado automaticamente após passar nos testes.
-            Ele mescla `${{ github.ref_name }}` em `main`.
-          labels: release
-
-      # 8. Instalar GitHub CLI
-      - name: Setup GitHub CLI
-        uses: cli/cli-action@v2
-        with:
-          version: latest
-
-      # 9. Forçar auto-merge do PR
-      - name: Auto-merge PR
-        run: |
-          pr_number=$(gh pr list --head "${{ github.ref_name }}" --base main --json number --jq '.[0].number')
-          if [ -n "$pr_number" ]; then
-            echo "Auto-merging PR #$pr_number"
-            gh pr merge $pr_number --merge --auto
-          else
-            echo "Nenhum PR encontrado para ${{ github.ref_name }} → main"
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          source_branch: ${{ github.ref_name }} # release/*
+          destination_branch: main
+          pr_title: "Auto PR from ${{ github.ref_name }} to main"
+          pr_body: |
+            This PR was automatically generated from branch `${{ github.ref_name }}`.
+            ✅ Build and tests passed successfully.
