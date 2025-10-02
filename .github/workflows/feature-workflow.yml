@@ -31,15 +31,18 @@ jobs:
       # 5. Test
       - name: Test
         run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
+        
+      # 6. Debug branch name
+      - name: Debug branch
+        run: echo "Branch atual: ${{ github.ref_name }}"
 
-      # 6. Criar Pull Request para develop (NÃO mergeia)
+      # 7. Criar Pull Request para develop (NÃO mergeia)
       - name: Create Pull Request to develop
         if: success()
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}  
-          base: develop
-          branch: ${{ github.head_ref || github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref_name }}
           base: develop
           title: "Auto PR from ${{ github.ref_name }} to develop"
           body: |
