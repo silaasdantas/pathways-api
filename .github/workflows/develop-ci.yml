@@ -1,28 +1,47 @@
-name: Develop to Release
+name: Develop CI and Release Prep
 
 on:
   push:
     branches:
-      - "develop"
+      - "develop" # dispara apenas quando há push/merge na branch develop
 
 jobs:
-  create-release-branch:
+  build-test-release:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0 # importante para enxergar todas as refs do git
+          fetch-depth: 0 # precisamos de todo histórico para ver releases anteriores
 
-      # 1. Descobrir última release existente
+      # 2. Setup .NET 8
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "8.0.x"
+
+      # 3. Restore dependências
+      - name: Restore dependencies
+        run: dotnet restore ./app/Pathways.Api.csproj
+
+      # 4. Build
+      - name: Build
+        run: dotnet build ./app/Pathways.Api.csproj --configuration Release --no-restore
+
+      # 5. Testes unitários
+      - name: Test
+        run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
+
+      # 6. Obter última release
       - name: Get latest release branch
         id: get_release
         run: |
           latest=$(git ls-remote --heads origin "refs/heads/release/*" | awk -F'/' '{print $NF}' | sort -V | tail -n1)
           echo "latest_release=$latest" >> $GITHUB_OUTPUT
 
-      # 2. Calcular próxima versão
+      # 7. Calcular próxima versão (incremento do patch)
       - name: Calculate next version
         id: calc_version
         run: |
@@ -37,7 +56,7 @@ jobs:
           fi
           echo "next_version=$next" >> $GITHUB_OUTPUT
 
-      # 3. Criar ou atualizar branch release/x.y.z
+      # 8. Criar ou atualizar a branch release/x.y.z
       - name: Create or update release branch
         run: |
           next="release/${{ steps.calc_version.outputs.next_version }}"
@@ -51,16 +70,12 @@ jobs:
           fi
           git push origin HEAD:$next
 
-      # 4. Criar PR develop → release/x.y.z
-      - name: Create or update Pull Request to release
-        uses: peter-evans/create-pull-request@v6
+      # 9. Criar/atualizar PR develop → release/x.y.z
+      - name: Create PR develop → release
+        uses: repo-sync/pull-request@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          base: ${{ steps.calc_version.outputs.next_version && format('release/{0}', steps.calc_version.outputs.next_version) }}
-          branch: develop
-          title: "Release ${{ steps.calc_version.outputs.next_version }}"
-          body: |
-            This PR merges `develop` into the release branch.
-          labels: |
-            release
-          draft: false
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          source_branch: develop
+          destination_branch: release/${{ steps.calc_version.outputs.next_version }}
+          pr_title: "Release ${{ steps.calc_version.outputs.next_version }}"
+          pr_body: "PR automático de develop para release/${{ steps.calc_version.outputs.next_version }}"
