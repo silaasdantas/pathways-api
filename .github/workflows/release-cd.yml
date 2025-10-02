@@ -5,6 +5,10 @@ on:
     branches:
       - "release/*"
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   build-test-merge:
     runs-on: ubuntu-latest
