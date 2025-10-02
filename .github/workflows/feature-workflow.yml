@@ -1,0 +1,53 @@
+name: Feature Branch Workflow
+
+on:
+  push:
+    branches:
+      - "feature/**" # dispara apenas para branches que começam com "feature/"
+
+jobs:
+  build-test-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout do código
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 2. Setup do .NET 8
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "8.0.x"
+
+      # 3. Restore dependências
+      - name: Restore dependencies
+        run: dotnet restore ./app/Pathways.Api.csproj
+
+      # 4. Build do projeto
+      - name: Build
+        run: dotnet build ./app/Pathways.Api.csproj --configuration Release --no-restore
+
+      # 5. Executar testes unitários
+      - name: Test
+        run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
+
+      # 6. Debug (mostra a branch atual no log, útil para verificar)
+      - name: Debug branch
+        run: echo "Branch atual - ${{ github.ref_name }}"
+
+      # 7. Criar Pull Request automático para develop
+      - name: Create Pull Request to develop
+        if: success() # só executa se os testes passarem
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: develop # branch de destino do PR
+          title: "Auto PR from ${{ github.ref_name }} to develop"
+          body: |
+            This PR was automatically generated from branch `${{ github.ref_name }}`.
+            ✅ Build and tests passed successfully.
+          labels: |
+            feature
+            auto-pr
+          draft: false # se quiser PR como rascunho, troque para true
