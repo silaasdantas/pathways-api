@@ -1,28 +1,26 @@
-name: Develop CI and Release Prep
+name: Develop CI
 
 on:
   push:
     branches:
-      - "develop" # dispara apenas quando há push/merge na branch develop
+      - develop
 
 jobs:
   build-test-release:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout repo
-      - name: Checkout repository
+      # 1. Checkout do repositório
+      - name: Checkout
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # precisamos de todo histórico para ver releases anteriores
 
-      # 2. Setup .NET 8
+      # 2. Setup .NET
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: "8.0.x"
 
-      # 3. Restore dependências
+      # 3. Restore
       - name: Restore dependencies
         run: dotnet restore ./app/Pathways.Api.csproj
 
@@ -30,55 +28,85 @@ jobs:
       - name: Build
         run: dotnet build ./app/Pathways.Api.csproj --configuration Release --no-restore
 
-      # 5. Testes unitários
-      - name: Test
-        run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
+      # 5. Test
+      - name: Run tests
+        run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --no-build --verbosity normal
 
-      # 6. Obter última release
-      - name: Get latest release branch
-        id: get_release
+      # 6. Verificar se já existe uma release PR aberta
+      - name: Check existing release PR
+        id: check_release
         run: |
-          latest=$(git ls-remote --heads origin "refs/heads/release/*" | awk -F'/' '{print $NF}' | sort -V | tail -n1)
-          echo "latest_release=$latest" >> $GITHUB_OUTPUT
-
-      # 7. Calcular próxima versão (incremento do patch)
-      - name: Calculate next version
-        id: calc_version
-        run: |
-          if [ -z "${{ steps.get_release.outputs.latest_release }}" ]; then
-            next="0.0.1"
+          prs=$(gh pr list --state open --base main --json headRefName --jq '.[].headRefName' | grep '^release/' || true)
+          if [ -n "$prs" ]; then
+            echo "release_branch=$prs" >> $GITHUB_OUTPUT
+            echo "existing=true" >> $GITHUB_OUTPUT
           else
-            last="${{ steps.get_release.outputs.latest_release }}"
-            patch=$(echo $last | awk -F. '{print $3}')
-            major=$(echo $last | awk -F. '{print $1}')
-            minor=$(echo $last | awk -F. '{print $2}')
-            next="$major.$minor.$((patch+1))"
+            echo "existing=false" >> $GITHUB_OUTPUT
           fi
-          echo "next_version=$next" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 8. Criar ou atualizar a branch release/x.y.z
+      # 7. Definir release branch e versão
+      - name: Define release branch
+        id: define_branch
+        run: |
+          if [ "${{ steps.check_release.outputs.existing }}" = "true" ]; then
+            echo "branch=${{ steps.check_release.outputs.release_branch }}" >> $GITHUB_OUTPUT
+          else
+            last=$(git ls-remote --heads origin "release/*" | awk -F'/' '{print $NF}' | sort -V | tail -n 1)
+            if [ -z "$last" ]; then
+              next="release/0.0.1"
+            else
+              prefix="release/"
+              version=${last#$prefix}
+              IFS='.' read -r major minor patch <<< "$version"
+              patch=$((patch+1))
+              next="release/$major.$minor.$patch"
+            fi
+            echo "branch=$next" >> $GITHUB_OUTPUT
+            echo "new_release=true" >> $GITHUB_OUTPUT
+          fi
+
+      # 8. Criar ou atualizar a release branch
       - name: Create or update release branch
         run: |
-          next="release/${{ steps.calc_version.outputs.next_version }}"
-          if git ls-remote --exit-code --heads origin $next; then
-            echo "Branch $next já existe, atualizando..."
-            git checkout $next
+          branch=${{ steps.define_branch.outputs.branch }}
+          git fetch origin
+          if git ls-remote --exit-code --heads origin $branch; then
+            echo "Atualizando branch existente $branch"
+            git checkout $branch
             git merge origin/develop --no-edit || true
           else
-            echo "Criando nova release $next a partir da main"
+            echo "Criando nova release branch $branch"
             git checkout origin/main
-            git checkout -b $next
+            git checkout -b $branch
+            git merge origin/develop --no-edit || true
           fi
-          git push origin HEAD:$next
+          git push origin HEAD:$branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 9. Criar/atualizar PR develop → release/x.y.z
+      # 9. Criar tag git para nova release
+      - name: Create Git Tag
+        if: steps.define_branch.outputs.new_release == 'true'
+        run: |
+          branch=${{ steps.define_branch.outputs.branch }}
+          version=${branch#release/}
+          tag="v$version"
+          echo "Criando tag $tag para $branch"
+          git tag $tag
+          git push origin $tag
+
+      # 10. Criar PR develop -> release (apenas se for nova release)
       - name: Create PR develop → release
+        if: steps.check_release.outputs.existing == 'false'
         uses: repo-sync/pull-request@v2
         with:
-          github_token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           source_branch: develop
-          destination_branch: release/${{ steps.calc_version.outputs.next_version }}
-          pr_title: "Release ${{ steps.calc_version.outputs.next_version }}"
+          destination_branch: ${{ steps.define_branch.outputs.branch }}
+          pr_title: "Release ${{ steps.define_branch.outputs.branch }}"
           pr_body: |
-            Este PR mescla `develop` em `release/${{ steps.calc_version.outputs.next_version }}`.
-            ✅ Build e testes passaram com sucesso.
+            Este PR mescla `develop` em `${{ steps.define_branch.outputs.branch }}`.
+            ✅ Build, testes e tag foram gerados com sucesso.
+          draft: false
