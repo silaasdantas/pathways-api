@@ -75,10 +75,10 @@ jobs:
       - name: Create PR develop → release
         uses: repo-sync/pull-request@v2
         with:
-        github_token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
-        source_branch: develop
-        destination_branch: release/${{ steps.calc_version.outputs.next_version }}
-        pr_title: "Release ${{ steps.calc_version.outputs.next_version }}"
-        pr_body: |
-          Este PR mescla `develop` em `release/${{ steps.calc_version.outputs.next_version }}`.
-          ✅ Build e testes passaram com sucesso.
+          github_token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          source_branch: develop
+          destination_branch: release/${{ steps.calc_version.outputs.next_version }}
+          pr_title: "Release ${{ steps.calc_version.outputs.next_version }}"
+          pr_body: |
+            Este PR mescla `develop` em `release/${{ steps.calc_version.outputs.next_version }}`.
+            ✅ Build e testes passaram com sucesso.
