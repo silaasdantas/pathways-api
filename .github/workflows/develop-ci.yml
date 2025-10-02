@@ -71,18 +71,11 @@ jobs:
           git push origin HEAD:$next
 
       # 9. Criar/atualizar PR develop → release/x.y.z
-      - name: Create Pull Request develop to release
-        uses: peter-evans/create-pull-request@v6
+      - name: Create PR develop → release
+        uses: repo-sync/pull-request@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          base: release/${{ steps.calc_version.outputs.next_version }}
-          head: develop
-          title: "Release ${{ steps.calc_version.outputs.next_version }}"
-          body: |
-            This PR merges `develop` into the release branch.
-            ✅ Build and tests passed successfully.
-          labels: |
-            release
-          draft: false
-          reviewers: |
-            silaasdantas
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          source_branch: develop
+          destination_branch: release/${{ steps.calc_version.outputs.next_version }}
+          pr_title: "Release ${{ steps.calc_version.outputs.next_version }}"
+          pr_body: "PR automático de develop para release/${{ steps.calc_version.outputs.next_version }}"
