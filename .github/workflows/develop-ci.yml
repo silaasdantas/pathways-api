@@ -30,7 +30,7 @@ jobs:
 
       # 5. Test
       - name: Run tests
-        run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --no-build --verbosity normal
+        run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
 
       # 6. Verificar se já existe uma release PR aberta
       - name: Check existing release PR
