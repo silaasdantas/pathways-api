@@ -1,0 +1,63 @@
+name: Release CD
+
+on:
+  push:
+    branches:
+      - "release/*" # dispara apenas em branches release/x.y.z
+
+jobs:
+  build-test-merge:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # 2. Setup .NET
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "8.0.x"
+
+      # 3. Restore
+      - name: Restore dependencies
+        run: dotnet restore ./app/Pathways.Api.csproj
+
+      # 4. Build
+      - name: Build
+        run: dotnet build ./app/Pathways.Api.csproj --configuration Release --no-restore
+
+      # 5. Test
+      - name: Run tests
+        run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --no-build --verbosity normal
+
+      # 6. (Opcional) Build Docker Image para validação
+      - name: Build Docker image
+        run: |
+          docker build -t pathways-api:test ./app
+
+      # 7. Criar ou atualizar PR release → main
+      - name: Create PR release → main
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+          branch: ${{ github.ref_name }} # release/x.y.z
+          title: "Release ${{ github.ref_name }} → main"
+          body: |
+            Este PR foi criado automaticamente após passar nos testes.
+            Ele mescla `${{ github.ref_name }}` em `main`.
+          labels: release
+
+      # 8. Auto-merge do PR (mantendo a release branch)
+      - name: Enable auto-merge
+        run: |
+          pr_number=$(gh pr list --head "${{ github.ref_name }}" --base main --json number --jq '.[0].number')
+          if [ -n "$pr_number" ]; then
+            gh pr merge $pr_number --auto --merge
+          else
+            echo "Nenhum PR encontrado para ${{ github.ref_name }} → main"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
