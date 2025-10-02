@@ -3,7 +3,7 @@ name: Release CD
 on:
   push:
     branches:
-      - "release/*" # dispara apenas em branches release/x.y.z
+      - "release/*"
 
 jobs:
   build-test-merge:
@@ -28,34 +28,41 @@ jobs:
       - name: Build
         run: dotnet build ./app/Pathways.Api.csproj --configuration Release --no-restore
 
-      # 5. Test
+      # 5. Test (comando atualizado)
       - name: Run tests
         run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
 
-      # 6. (Opcional) Build Docker Image para validação
+      # 6. Build Docker Image (opcional, só validação)
       - name: Build Docker image
-        run: |
-          docker build -t pathways-api:test ./app
+        run: docker build -t pathways-api:test ./app
 
       # 7. Criar ou atualizar PR release → main
       - name: Create PR release → main
+        id: create_pr
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: main
-          branch: ${{ github.ref_name }} # release/x.y.z
+          branch: ${{ github.ref_name }}
           title: "Release ${{ github.ref_name }} → main"
           body: |
             Este PR foi criado automaticamente após passar nos testes.
             Ele mescla `${{ github.ref_name }}` em `main`.
           labels: release
 
-      # 8. Auto-merge do PR (mantendo a release branch)
-      - name: Enable auto-merge
+      # 8. Instalar GitHub CLI
+      - name: Setup GitHub CLI
+        uses: cli/cli-action@v2
+        with:
+          version: latest
+
+      # 9. Forçar auto-merge do PR
+      - name: Auto-merge PR
         run: |
           pr_number=$(gh pr list --head "${{ github.ref_name }}" --base main --json number --jq '.[0].number')
           if [ -n "$pr_number" ]; then
-            gh pr merge $pr_number --auto --merge
+            echo "Auto-merging PR #$pr_number"
+            gh pr merge $pr_number --merge --auto
           else
             echo "Nenhum PR encontrado para ${{ github.ref_name }} → main"
           fi
