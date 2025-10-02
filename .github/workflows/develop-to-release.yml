@@ -6,7 +6,8 @@ on:
       - develop
 
 permissions:
-  contents: write # necessário para criar/atualizar branch
+  contents: write # permite commits/pushes
+  pull-requests: write # permite criar PRs
 
 jobs:
   build-test-release:
@@ -35,11 +36,11 @@ jobs:
       - name: Run tests
         run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
 
-      # 6. Instalar GitHub CLI
-      - name: Setup GitHub CLI
-        uses: cli/cli-action@v2
-        with:
-          version: latest
+      # 6. Install GitHub CLI
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
 
       # 7. Verificar se já existe PR aberto develop → release/*
       - name: Check existing release PR
