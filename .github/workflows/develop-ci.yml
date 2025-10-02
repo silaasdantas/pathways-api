@@ -78,7 +78,8 @@ jobs:
           git fetch origin
           if git ls-remote --exit-code --heads origin $branch; then
             echo "Atualizando branch existente $branch"
-            git checkout $branch
+            git fetch origin $branch
+            git checkout -B $branch origin/$branch
             git merge origin/develop --no-edit || true
           else
             echo "Criando nova release branch $branch"
