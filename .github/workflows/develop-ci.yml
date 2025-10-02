@@ -65,8 +65,9 @@ jobs:
             git checkout $next
             git merge origin/develop --no-edit || true
           else
-            echo "Criando nova release $next"
-            git checkout -b $next origin/develop
+            echo "Criando nova release $next a partir da main"
+            git checkout origin/main
+            git checkout -b $next
           fi
           git push origin HEAD:$next
 
@@ -74,8 +75,10 @@ jobs:
       - name: Create PR develop → release
         uses: repo-sync/pull-request@v2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          source_branch: develop
-          destination_branch: release/${{ steps.calc_version.outputs.next_version }}
-          pr_title: "Release ${{ steps.calc_version.outputs.next_version }}"
-          pr_body: "PR automático de develop para release/${{ steps.calc_version.outputs.next_version }}"
+        github_token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        source_branch: develop
+        destination_branch: release/${{ steps.calc_version.outputs.next_version }}
+        pr_title: "Release ${{ steps.calc_version.outputs.next_version }}"
+        pr_body: |
+          Este PR mescla `develop` em `release/${{ steps.calc_version.outputs.next_version }}`.
+          ✅ Build e testes passaram com sucesso.
