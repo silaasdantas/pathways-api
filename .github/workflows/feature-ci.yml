@@ -6,7 +6,8 @@ on:
       - "feature/**"
 
 permissions:
-  contents: write # necessário para criar/atualizar PRs
+  contents: write # permite commits e pushes
+  pull-requests: write # permite criar e atualizar PRs
 
 jobs:
   build-test-pr:
