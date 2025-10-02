@@ -1,16 +1,19 @@
-name: Feature → Develop CI
+name: Develop → Release CI
 
 on:
   push:
     branches:
-      - "feature/**"
+      - develop
+
+permissions:
+  contents: write # necessário para criar/atualizar branch
 
 jobs:
-  build-test-pr:
+  build-test-release:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout do código
+      # 1. Checkout
       - name: Checkout
         uses: actions/checkout@v3
 
@@ -38,22 +41,68 @@ jobs:
         with:
           version: latest
 
-      # 7. Criar ou atualizar PR da feature → develop
-      - name: Create or update PR
+      # 7. Verificar se já existe PR aberto develop → release/*
+      - name: Check existing release PR
+        id: check_release
         run: |
-          branch="${{ github.ref_name }}"
-          pr_number=$(gh pr list --head "$branch" --base develop --state open --json number --jq '.[0].number')
-
-          if [ -n "$pr_number" ]; then
-            echo "PR existente encontrado (#$pr_number). Commits serão acumulados."
+          pr_branch=$(gh pr list --state open --base main --json headRefName --jq '.[].headRefName' | grep '^release/' || true)
+          if [ -n "$pr_branch" ]; then
+            echo "release_branch=$pr_branch" >> $GITHUB_OUTPUT
+            echo "existing=true" >> $GITHUB_OUTPUT
           else
-            echo "Nenhum PR existente. Criando novo PR."
-            gh pr create \
-              --base develop \
-              --head "$branch" \
-              --title "Feature $branch → develop" \
-              --body "PR criado automaticamente da branch \`$branch\` para \`develop\`. ✅ Build e testes passaram com sucesso." \
-              --label "feature,auto-pr"
+            echo "existing=false" >> $GITHUB_OUTPUT
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 8. Definir release branch
+      - name: Define release branch
+        id: define_branch
+        run: |
+          if [ "${{ steps.check_release.outputs.existing }}" = "true" ]; then
+            echo "branch=${{ steps.check_release.outputs.release_branch }}" >> $GITHUB_OUTPUT
+          else
+            last=$(git ls-remote --heads origin "release/*" | awk -F'/' '{print $NF}' | sort -V | tail -n 1)
+            if [ -z "$last" ]; then
+              next="release/0.0.1"
+            else
+              prefix="release/"
+              version=${last#$prefix}
+              IFS='.' read -r major minor patch <<< "$version"
+              patch=$((patch+1))
+              next="release/$major.$minor.$patch"
+            fi
+            echo "branch=$next" >> $GITHUB_OUTPUT
+          fi
+
+      # 9. Criar ou atualizar release branch
+      - name: Create or update release branch
+        run: |
+          branch=${{ steps.define_branch.outputs.branch }}
+          git fetch origin
+          if git ls-remote --exit-code --heads origin $branch; then
+            echo "Atualizando branch existente $branch"
+            git checkout $branch
+            git merge origin/develop --no-edit || true
+          else
+            echo "Criando nova release branch $branch"
+            git checkout origin/main
+            git checkout -b $branch
+            git merge origin/develop --no-edit || true
+          fi
+          git push origin HEAD:$branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 10. Criar PR develop → release (só se não existir ainda)
+      - name: Create PR develop → release
+        if: steps.check_release.outputs.existing == 'false'
+        run: |
+          branch=${{ steps.define_branch.outputs.branch }}
+          gh pr create \
+            --base "$branch" \
+            --head develop \
+            --title "Release $branch" \
+            --body "PR criado automaticamente mesclando develop em $branch. ✅ Build e testes passaram."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
