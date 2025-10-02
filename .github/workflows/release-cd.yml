@@ -1,0 +1,64 @@
+name: Release → Main CD
+
+on:
+  push:
+    branches:
+      - "release/*"
+
+permissions:
+  contents: write # permite atualizar branches
+  pull-requests: write # permite criar PRs
+
+jobs:
+  build-test-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # 2. Setup .NET
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "8.0.x"
+
+      # 3. Restore
+      - name: Restore dependencies
+        run: dotnet restore ./app/Pathways.Api.csproj
+
+      # 4. Build
+      - name: Build
+        run: dotnet build ./app/Pathways.Api.csproj --configuration Release --no-restore
+
+      # 5. Test
+      - name: Run tests
+        run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
+
+      # 6. Install GitHub CLI
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
+
+      # 7. Criar ou atualizar PR release → main
+      - name: Create or update PR release → main
+        run: |
+          branch="${{ github.ref_name }}"
+          echo "Branch atual: $branch"
+
+          pr_number=$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number')
+
+          if [ -n "$pr_number" ]; then
+            echo "PR existente encontrado (#$pr_number). Commits serão acumulados."
+          else
+            echo "Nenhum PR existente. Criando novo PR."
+            gh pr create \
+              --base main \
+              --head "$branch" \
+              --title "Release $branch → main" \
+              --body "PR criado automaticamente da branch \`$branch\` para \`main\`. ✅ Build e testes passaram com sucesso."
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
