@@ -1,4 +1,4 @@
-name: Develop CI
+name: Develop → Release CI
 
 on:
   push:
@@ -6,15 +6,14 @@ on:
       - develop
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: write # necessário para criar/atualizar branch
 
 jobs:
   build-test-release:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout do repositório
+      # 1. Checkout
       - name: Checkout
         uses: actions/checkout@v3
 
@@ -36,13 +35,19 @@ jobs:
       - name: Run tests
         run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
 
-      # 6. Verificar se já existe uma release PR aberta
+      # 6. Instalar GitHub CLI
+      - name: Setup GitHub CLI
+        uses: cli/cli-action@v2
+        with:
+          version: latest
+
+      # 7. Verificar se já existe PR aberto develop → release/*
       - name: Check existing release PR
         id: check_release
         run: |
-          prs=$(gh pr list --state open --base main --json headRefName --jq '.[].headRefName' | grep '^release/' || true)
-          if [ -n "$prs" ]; then
-            echo "release_branch=$prs" >> $GITHUB_OUTPUT
+          pr_branch=$(gh pr list --state open --base main --json headRefName --jq '.[].headRefName' | grep '^release/' || true)
+          if [ -n "$pr_branch" ]; then
+            echo "release_branch=$pr_branch" >> $GITHUB_OUTPUT
             echo "existing=true" >> $GITHUB_OUTPUT
           else
             echo "existing=false" >> $GITHUB_OUTPUT
@@ -50,7 +55,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 7. Definir release branch e versão
+      # 8. Definir release branch
       - name: Define release branch
         id: define_branch
         run: |
@@ -68,18 +73,16 @@ jobs:
               next="release/$major.$minor.$patch"
             fi
             echo "branch=$next" >> $GITHUB_OUTPUT
-            echo "new_release=true" >> $GITHUB_OUTPUT
           fi
 
-      # 8. Criar ou atualizar a release branch
+      # 9. Criar ou atualizar release branch
       - name: Create or update release branch
         run: |
           branch=${{ steps.define_branch.outputs.branch }}
           git fetch origin
           if git ls-remote --exit-code --heads origin $branch; then
             echo "Atualizando branch existente $branch"
-            git fetch origin $branch
-            git checkout -B $branch origin/$branch
+            git checkout $branch
             git merge origin/develop --no-edit || true
           else
             echo "Criando nova release branch $branch"
@@ -91,27 +94,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 9. Criar tag git para nova release
-      - name: Create Git Tag
-        if: steps.define_branch.outputs.new_release == 'true'
-        run: |
-          branch=${{ steps.define_branch.outputs.branch }}
-          version=${branch#release/}
-          tag="v$version"
-          echo "Criando tag $tag para $branch"
-          git tag $tag
-          git push origin $tag
-
-      # 10. Criar PR develop -> release (apenas se for nova release)
+      # 10. Criar PR develop → release (só se não existir ainda)
       - name: Create PR develop → release
         if: steps.check_release.outputs.existing == 'false'
-        uses: repo-sync/pull-request@v2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          source_branch: develop
-          destination_branch: ${{ steps.define_branch.outputs.branch }}
-          pr_title: "Release ${{ steps.define_branch.outputs.branch }}"
-          pr_body: |
-            Este PR mescla `develop` em `${{ steps.define_branch.outputs.branch }}`.
-            ✅ Build, testes e tag foram gerados com sucesso.
-          draft: false
+        run: |
+          branch=${{ steps.define_branch.outputs.branch }}
+          gh pr create \
+            --base "$branch" \
+            --head develop \
+            --title "Release $branch" \
+            --body "PR criado automaticamente mesclando develop em $branch. ✅ Build e testes passaram."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
