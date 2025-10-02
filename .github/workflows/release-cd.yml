@@ -1,4 +1,4 @@
-name: Release CD
+name: Release → Main CD
 
 on:
   push:
@@ -6,11 +6,10 @@ on:
       - "release/*"
 
 permissions:
-  contents: read
-  pull-requests: write
+  contents: write # necessário para atualizar branch
 
 jobs:
-  build-test-merge:
+  build-test-pr:
     runs-on: ubuntu-latest
 
     steps:
@@ -32,50 +31,31 @@ jobs:
       - name: Build
         run: dotnet build ./app/Pathways.Api.csproj --configuration Release --no-restore
 
-      # 5. Test (comando atualizado)
+      # 5. Test
       - name: Run tests
         run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
 
-      # 6. Build Docker Image (opcional, só validação)
-      - name: Build Docker image
-        run: docker build -t pathways-api:test ./app
-
-      # 7. Criar ou atualizar PR release → main
-      - name: Create PR release → main
-        id: create_pr
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          base: main
-          branch: ${{ github.ref_name }}
-          title: "Release ${{ github.ref_name }} → main"
-          body: |
-            Este PR foi criado automaticamente após passar nos testes.
-            Ele mescla `${{ github.ref_name }}` em `main`.
-          labels: release
-
-      # 8. Instalar GitHub CLI
+      # 6. Instalar GitHub CLI
       - name: Setup GitHub CLI
         uses: cli/cli-action@v2
         with:
           version: latest
 
-      # 9. Forçar auto-merge do PR
-      - name: Auto-merge PR
+      # 7. Criar ou atualizar PR release → main
+      - name: Create or update PR release → main
         run: |
-          pr_number=$(gh pr list --head "${{ github.ref_name }}" --base main --json number --jq '.[0].number')
+          branch="${{ github.ref_name }}"
+          pr_number=$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number')
+
           if [ -n "$pr_number" ]; then
-            echo "Auto-merging PR #$pr_number"
-            merge_state=$(gh pr view "$pr_number" --json mergeStateStatus --jq '.mergeStateStatus')
-            if [ "$merge_state" = "CLEAN" ] || [ "$merge_state" = "HAS_HOOKS" ] || [ "$merge_state" = "UNSTABLE" ]; then
-              if ! gh pr merge "$pr_number" --merge --auto; then
-                echo "Auto-merge não disponível para o PR #$pr_number. Prosseguindo sem falhar."
-              fi
-            else
-              echo "PR #$pr_number não está pronto para auto-merge (estado: $merge_state)."
-            fi
+            echo "PR existente encontrado (#$pr_number). Commits serão acumulados."
           else
-            echo "Nenhum PR encontrado para ${{ github.ref_name }} → main"
+            echo "Nenhum PR existente. Criando novo PR."
+            gh pr create \
+              --base main \
+              --head "$branch" \
+              --title "Release $branch → main" \
+              --body "PR criado automaticamente da branch \`$branch\` para \`main\`. ✅ Build e testes passaram."
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
