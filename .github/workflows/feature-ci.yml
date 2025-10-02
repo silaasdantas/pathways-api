@@ -57,8 +57,7 @@ jobs:
               --base develop \
               --head "$branch" \
               --title "Feature $branch → develop" \
-              --body "PR criado automaticamente da branch \`$branch\` para \`develop\`. ✅ Build e testes passaram com sucesso." \
-              --label "feature,auto-pr"
+              --body "PR criado automaticamente da branch \`$branch\` para \`develop\`. ✅ Build e testes passaram com sucesso."
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
