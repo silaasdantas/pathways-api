@@ -43,6 +43,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: develop # branch de destino do PR
+          head: ${{ github.ref_name }} # origem do PR (feature/*)
           title: "Auto PR from ${{ github.ref_name }} to develop"
           body: |
             This PR was automatically generated from branch `${{ github.ref_name }}`.
