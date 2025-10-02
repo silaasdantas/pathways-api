@@ -1,19 +1,66 @@
-name: Develop CI
+name: Develop to Release
 
 on:
   push:
-    branches: [develop]
-  pull_request:
-    branches: [develop]
+    branches:
+      - "develop"
 
 jobs:
-  build-and-test:
+  create-release-branch:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-dotnet@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
         with:
-          dotnet-version: "8.0.x"
-      - run: dotnet restore ./app/Pathways.Api.csproj
-      - run: dotnet build ./app/Pathways.Api.csproj --configuration Release --no-restore
-      - run: dotnet test ./tests/Pathways.Api.Tests.csproj --configuration Release --verbosity normal
+          fetch-depth: 0 # importante para enxergar todas as refs do git
+
+      # 1. Descobrir última release existente
+      - name: Get latest release branch
+        id: get_release
+        run: |
+          latest=$(git ls-remote --heads origin "refs/heads/release/*" | awk -F'/' '{print $NF}' | sort -V | tail -n1)
+          echo "latest_release=$latest" >> $GITHUB_OUTPUT
+
+      # 2. Calcular próxima versão
+      - name: Calculate next version
+        id: calc_version
+        run: |
+          if [ -z "${{ steps.get_release.outputs.latest_release }}" ]; then
+            next="0.0.1"
+          else
+            last="${{ steps.get_release.outputs.latest_release }}"
+            patch=$(echo $last | awk -F. '{print $3}')
+            major=$(echo $last | awk -F. '{print $1}')
+            minor=$(echo $last | awk -F. '{print $2}')
+            next="$major.$minor.$((patch+1))"
+          fi
+          echo "next_version=$next" >> $GITHUB_OUTPUT
+
+      # 3. Criar ou atualizar branch release/x.y.z
+      - name: Create or update release branch
+        run: |
+          next="release/${{ steps.calc_version.outputs.next_version }}"
+          if git ls-remote --exit-code --heads origin $next; then
+            echo "Branch $next já existe, atualizando..."
+            git checkout $next
+            git merge origin/develop --no-edit || true
+          else
+            echo "Criando nova release $next"
+            git checkout -b $next origin/develop
+          fi
+          git push origin HEAD:$next
+
+      # 4. Criar PR develop → release/x.y.z
+      - name: Create or update Pull Request to release
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: ${{ steps.calc_version.outputs.next_version && format('release/{0}', steps.calc_version.outputs.next_version) }}
+          branch: develop
+          title: "Release ${{ steps.calc_version.outputs.next_version }}"
+          body: |
+            This PR merges `develop` into the release branch.
+          labels: |
+            release
+          draft: false
