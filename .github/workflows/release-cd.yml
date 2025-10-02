@@ -62,7 +62,14 @@ jobs:
           pr_number=$(gh pr list --head "${{ github.ref_name }}" --base main --json number --jq '.[0].number')
           if [ -n "$pr_number" ]; then
             echo "Auto-merging PR #$pr_number"
-            gh pr merge $pr_number --merge --auto
+            merge_state=$(gh pr view "$pr_number" --json mergeStateStatus --jq '.mergeStateStatus')
+            if [ "$merge_state" = "CLEAN" ] || [ "$merge_state" = "HAS_HOOKS" ] || [ "$merge_state" = "UNSTABLE" ]; then
+              if ! gh pr merge "$pr_number" --merge --auto; then
+                echo "Auto-merge não disponível para o PR #$pr_number. Prosseguindo sem falhar."
+              fi
+            else
+              echo "PR #$pr_number não está pronto para auto-merge (estado: $merge_state)."
+            fi
           else
             echo "Nenhum PR encontrado para ${{ github.ref_name }} → main"
           fi
